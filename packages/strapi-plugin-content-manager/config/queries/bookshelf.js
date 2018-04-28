@@ -1,7 +1,7 @@
 const _ = require('lodash');
 
 module.exports = {
-  find: async function (params) {
+  find: async function (params, populate) {
     return this.query(function(qb) {
       _.forEach(params.where, (where, key) => {
         if (_.isArray(where.value)) {
@@ -25,7 +25,7 @@ module.exports = {
         qb.limit(_.toNumber(params.limit));
       }
     }).fetchAll({
-      withRelated: this.associations.map(x => x.alias)
+      withRelated: populate || this.associations.map(x => x.alias)
     });
   },
 
@@ -35,16 +35,37 @@ module.exports = {
       .count();
   },
 
-  findOne: async function (params) {
+  findOne: async function (params, populate, raw = true) {
     const record = await this
       .forge({
         [this.primaryKey]: params[this.primaryKey]
       })
       .fetch({
-        withRelated: this.associations.map(x => x.alias)
+        withRelated: populate || this.associations.map(x => x.alias)
       });
 
-    return record ? record.toJSON() : record;
+    const data = record ? record.toJSON() : record;
+
+    // Retrieve data manually.
+    if (_.isEmpty(populate)) {
+      const arrayOfPromises = this.associations
+        .filter(association => ['manyMorphToOne', 'manyMorphToMany'].includes(association.nature))
+        .map(association => {
+          return this.morph.forge()
+            .where({
+              [`${this.collectionName}_id`]: params[this.primaryKey]
+            })
+            .fetchAll()
+        });
+
+      const related = await Promise.all(arrayOfPromises);
+
+      related.forEach((value, index) => {
+        data[this.associations[index].alias] = value ? value.toJSON() : value;
+      });
+    }
+
+    return data;
   },
 
   create: async function (params) {
@@ -57,7 +78,7 @@ module.exports = {
       return acc;
     }, {});
 
-    const entry = await this
+    const request = await this
       .forge(values)
       .save()
       .catch((err) => {
@@ -69,11 +90,13 @@ module.exports = {
         throw err;
       });
 
+    const entry = request.toJSON ? request.toJSON() : request;
+
     return module.exports.update.call(this, {
       [this.primaryKey]: entry[this.primaryKey],
-      values: _.merge({
+      values: _.assign({
         id: entry[this.primaryKey]
-      }, params.values)
+      }, params.values, entry)
     });
   },
 
@@ -146,9 +169,7 @@ module.exports = {
           case 'oneToMany':
           case 'manyToOne':
           case 'manyToMany':
-            if (association.nature === 'manyToMany' && details.dominant === true) {
-              acc[current] = params.values[current];
-            } else if (response[current] && _.isArray(response[current]) && current !== 'id') {
+            if (response[current] && _.isArray(response[current]) && current !== 'id') {
               // Records to add in the relation.
               const toAdd = _.differenceWith(params.values[current], response[current], (a, b) =>
                 a[this.primaryKey].toString() === b[this.primaryKey].toString()
@@ -214,7 +235,7 @@ module.exports = {
                 })
               }
 
-              if (association.type === 'model') {
+              if (association.type === 'model' || (association.type === 'collection' && _.isObject(array))) {
                 return _.isEmpty(array) ? [] : transformToArrayID([array]);
               }
 

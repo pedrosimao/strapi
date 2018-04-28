@@ -1,13 +1,25 @@
 import { fork, call, put, takeLatest } from 'redux-saga/effects';
 import request from 'utils/request';
 
-import { getGaStatusSucceeded, getLayoutSucceeded } from './actions';
+import {
+  getCurrEnvSucceeded,
+  getGaStatusSucceeded,
+  getLayoutSucceeded,
+  getStrapiVersionSucceeded,
+} from './actions';
 import { GET_GA_STATUS, GET_LAYOUT } from './constants';
 
 function* getGaStatus() {
   try {
-    const response = yield call(request, '/admin/gaConfig', { method: 'GET' });
-    yield put(getGaStatusSucceeded(response.allowGa));
+    const [allowGa, strapiVersion, currentEnvironment] = yield [
+      call(request, '/admin/gaConfig', { method: 'GET' }),
+      call(request, '/admin/strapiVersion', { method: 'GET' }),
+      call(request, '/admin/currentEnvironment', { method: 'GET' }),
+    ];
+
+    yield put(getCurrEnvSucceeded(currentEnvironment.currentEnvironment));
+    yield put(getGaStatusSucceeded(allowGa));
+    yield put(getStrapiVersionSucceeded(strapiVersion.strapiVersion));
   } catch(err) {
     strapi.notification.error('notification.error');
   }

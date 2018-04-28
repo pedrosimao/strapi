@@ -311,6 +311,10 @@ module.exports.app = async function() {
       } else {
         acc[current] = !isObject(currentSettings) ? {} : currentSettings;
 
+        if (this.hook[current].isPlugin) {
+          acc[current].enabled = true;
+        }
+
         if (!acc[current].hasOwnProperty('enabled')) {
           this.log.warn(`(hook:${current}) wasn't loaded due to missing key \`enabled\` in the configuration`);
         }
@@ -323,6 +327,7 @@ module.exports.app = async function() {
     }, {});
 
     this.config.port = get(this.config.currentEnvironment, 'server.port') || this.config.port;
+    this.config.host = get(this.config.currentEnvironment, 'server.host') || this.config.host;
     this.config.url = `http://${this.config.host}:${this.config.port}`;
 };
 

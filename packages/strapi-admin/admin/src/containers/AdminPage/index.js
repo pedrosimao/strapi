@@ -59,6 +59,8 @@ import selectAdminPage from './selectors';
 
 import styles from './styles.scss';
 
+const PLUGINS_TO_BLOCK_PRODUCTION = ['content-type-builder', 'settings-manager'];
+
 export class AdminPage extends React.Component { // eslint-disable-line react/prefer-stateless-function
   state = { hasAlreadyRegistereOtherPlugins: false };
 
@@ -136,14 +138,34 @@ export class AdminPage extends React.Component { // eslint-disable-line react/pr
 
   showLeftMenu = () => !includes(this.props.location.pathname, 'users-permissions/auth/');
 
+  retrievePlugins = () => {
+    const { adminPage: { currentEnvironment }, plugins } = this.props;
+
+    if (currentEnvironment === 'production') {
+      let pluginsToDisplay = plugins;
+      PLUGINS_TO_BLOCK_PRODUCTION.map(plugin =>
+        pluginsToDisplay = pluginsToDisplay.delete(plugin));
+
+      return pluginsToDisplay;
+    }
+
+    return plugins;
+  }
+
   render() {
-    const leftMenu = this.showLeftMenu() ? <LeftMenu plugins={this.props.plugins} layout={this.props.adminPage.layout} /> : '';
+    const { adminPage } = this.props;
     const header = this.showLeftMenu() ? <Header /> : '';
     const style = this.showLeftMenu() ? {} : { width: '100%' };
 
     return (
       <div className={styles.adminPage}>
-        {leftMenu}
+        {this.showLeftMenu() && (
+          <LeftMenu
+            plugins={this.retrievePlugins()}
+            layout={adminPage.layout}
+            version={adminPage.strapiVersion}
+          />
+        )}
         { auth.getToken() && this.props.hasUserPlugin && this.isUrlProtected(this.props) ? (
           <Logout />
         ) : ''}
